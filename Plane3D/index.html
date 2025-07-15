@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lost in Space: Asteroid Dodger</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <style>
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: sans-serif;
+  color: white;
+
+  /* Ganti warna dengan gambar background */
+  background-image: url('bg.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+
+    #game-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 10;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #score {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 2em;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px black;
+    }
+
+    #start-screen, #game-over-screen {
+      background-color: rgba(0, 0, 0, 0.8);
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 0 20px cyan;
+    }
+
+    button {
+      background-color: cyan;
+      color: black;
+      font-size: 1.5em;
+      font-weight: bold;
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- UI Game -->
+  <div id="game-overlay">
+    <div id="score">Score: 0</div>
+    <div id="start-screen">
+      <h1>Lost in Space</h1>
+      <p>Gunakan WASD / panah untuk menghindari asteroid</p>
+      <button id="start-button">Mulai Game</button>
+    </div>
+    <div id="game-over-screen" class="hidden">
+      <h1>Game Over</h1>
+      <p id="final-score">Skor Akhir: 0</p>
+      <button id="restart-button">Main Lagi</button>
+    </div>
+  </div>
+
+  <!-- Scene A-Frame -->
+  <a-scene>
+    <a-assets>
+      <a-asset-item id="jet" src="military_jet.glb"></a-asset-item>
+      <a-asset-item id="meteor" src="meteor.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- Pesawat pemain -->
+    <a-entity id="player"
+              gltf-model="#jet"
+              scale="0.1 0.1 0.1"
+              position="0 0 0"
+              rotation="0 0 0">
+    </a-entity>
+
+    <!-- Kamera -->
+    <a-entity camera position="0 0 5"></a-entity>
+
+    <!-- Lampu -->
+    <a-entity light="type: ambient; intensity: 1; color: #ffffff"></a-entity>
+  </a-scene>
+
+  <!-- Script Game -->
+  <script>
+    const player = document.getElementById('player');
+    const scene = document.querySelector('a-scene');
+    const startBtn = document.getElementById('start-button');
+    const restartBtn = document.getElementById('restart-button');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const scoreDisplay = document.getElementById('score');
+    const finalScore = document.getElementById('final-score');
+
+    let keyboard = {};
+    let asteroids = [];
+    let score = 0;
+    let gameRunning = false;
+    let spawnInterval, scoreInterval;
+
+    const moveSpeed = 0.1;
+    const asteroidSpeed = 0.1;
+
+    document.addEventListener('keydown', e => keyboard[e.key.toLowerCase()] = true);
+    document.addEventListener('keyup', e => keyboard[e.key.toLowerCase()] = false);
+
+    startBtn.onclick = startGame;
+    restartBtn.onclick = startGame;
+
+    function startGame() {
+      gameRunning = true;
+      score = 0;
+      asteroids.forEach(a => a.parentNode && a.parentNode.removeChild(a));
+      asteroids = [];
+
+      startScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+      updateScore(0);
+      player.setAttribute('position', { x: 0, y: 0, z: 0 });
+
+      spawnInterval = setInterval(spawnAsteroid, 1000);
+      scoreInterval = setInterval(() => updateScore(score + 1), 100);
+
+      animate();
+    }
+
+    function endGame() {
+      gameRunning = false;
+      clearInterval(spawnInterval);
+      clearInterval(scoreInterval);
+      finalScore.textContent = `Skor Akhir: ${score}`;
+      gameOverScreen.classList.remove('hidden');
+    }
+
+    function updateScore(val) {
+      score = val;
+      scoreDisplay.textContent = `Score: ${score}`;
+    }
+
+    function spawnAsteroid() {
+      const x = (Math.random() - 0.5) * 10;
+      const y = (Math.random() - 0.5) * 6;
+      const z = -10;
+
+      const meteor = document.createElement('a-entity');
+      meteor.setAttribute('gltf-model', '#meteor');
+      meteor.setAttribute('scale', '0.5 0.5 0.5');
+      meteor.setAttribute('position', `${x} ${y} ${z}`);
+      meteor.setAttribute('rotation', `${Math.random() * 360} ${Math.random() * 360} 0`);
+
+      scene.appendChild(meteor);
+      asteroids.push(meteor);
+    }
+
+    function updatePlayerMovement() {
+      if (!player || !player.object3D) return;
+      const pos = player.object3D.position;
+      if (keyboard['w'] || keyboard['arrowup']) pos.y += moveSpeed;
+      if (keyboard['s'] || keyboard['arrowdown']) pos.y -= moveSpeed;
+      if (keyboard['a'] || keyboard['arrowleft']) pos.x -= moveSpeed;
+      if (keyboard['d'] || keyboard['arrowright']) pos.x += moveSpeed;
+
+      pos.x = Math.max(-5, Math.min(5, pos.x));
+      pos.y = Math.max(-3, Math.min(3, pos.y));
+    }
+
+    function checkCollision(asteroid) {
+      if (!player.object3D || !asteroid.object3D) return false;
+      const p = player.object3D.position;
+      const a = asteroid.object3D.position;
+      const dx = p.x - a.x;
+      const dy = p.y - a.y;
+      const dz = p.z - a.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      return dist < 0.7;
+    }
+
+    function animate() {
+      if (!gameRunning) return;
+
+      updatePlayerMovement();
+
+      asteroids.forEach((asteroid, i) => {
+        if (!asteroid.object3D) return;
+        const pos = asteroid.object3D.position;
+        pos.z += asteroidSpeed;
+
+        if (checkCollision(asteroid)) {
+          endGame();
+        }
+
+        if (pos.z > 6) {
+          asteroid.parentNode && asteroid.parentNode.removeChild(asteroid);
+          asteroids.splice(i, 1);
+        }
+      });
+
+      requestAnimationFrame(animate);
+    }
+  </script>
+</body>
+</html>
